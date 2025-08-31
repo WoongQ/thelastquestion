@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
@@ -82,6 +82,78 @@
       border-radius: 5px;
     }
 
+    .visitor-counter {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 15px;
+      border-radius: 5px;
+      font-size: 14px;
+      color: #4a9eff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .visitor-counter.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .visitor-counter:hover {
+      background: rgba(0, 0, 0, 0.8);
+      transform: scale(1.05);
+    }
+
+    .visitor-counter .icon {
+      font-size: 16px;
+    }
+
+    .visitor-counter .count {
+      font-weight: bold;
+    }
+
+    .visitor-stats {
+      position: fixed;
+      top: 70px;
+      left: 20px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 15px;
+      border-radius: 5px;
+      font-size: 12px;
+      color: #fff;
+      display: none;
+      min-width: 200px;
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .visitor-stats.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .visitor-stats.show {
+      display: block;
+    }
+
+    .visitor-stats .stat-item {
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .visitor-stats .stat-label {
+      color: #4a9eff;
+    }
+
     .volume-control {
       width: 100px;
       height: 5px;
@@ -138,6 +210,32 @@
 
 <body>
   <canvas id="stars" class="stars"></canvas>
+
+  <!-- 방문자 카운터 -->
+  <div class="visitor-counter" onclick="toggleVisitorStats()">
+    <span class="icon">👥</span>
+    <span>Visitors: <span class="count" id="visitor-count">0</span></span>
+  </div>
+
+  <!-- 방문자 통계 -->
+  <div class="visitor-stats" id="visitor-stats">
+    <div class="stat-item">
+      <span class="stat-label">Total Visitors:</span>
+      <span id="total-visitors">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Today:</span>
+      <span id="today-visitors">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">This Week:</span>
+      <span id="week-visitors">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Last Visit:</span>
+      <span id="last-visit">-</span>
+    </div>
+  </div>
 
   <div id="cover" class="part-container active">
     <div class="text-section"
@@ -600,6 +698,9 @@
             newPart.style.opacity = '1';
           }, 10); // 짧은 지연으로 렌더링 보장
           currentPart = partNum;
+
+          // 방문자 카운터 표시/숨김 처리
+          toggleVisitorCounter(partNum === 0);
         } else {
           console.error(`Part ${partNum} not found`);
         }
@@ -673,6 +774,201 @@
       requestAnimationFrame(animateStars);
     }
     animateStars();
+
+    // Visitor tracking system (without external services)
+    class VisitorTracker {
+      constructor() {
+        this.storageKey = 'thelastquestion_visitors';
+        this.sessionKey = 'thelastquestion_session';
+        this.statsKey = 'thelastquestion_stats';
+        this.init();
+      }
+
+      init() {
+        this.loadStats();
+        this.recordVisit();
+        this.updateDisplay();
+      }
+
+      loadStats() {
+        try {
+          const stored = localStorage.getItem(this.statsKey);
+          this.stats = stored ? JSON.parse(stored) : {
+            totalVisitors: 0,
+            todayVisitors: 0,
+            weekVisitors: 0,
+            lastVisit: null,
+            visitHistory: []
+          };
+        } catch (error) {
+          console.log('Error loading stats:', error);
+          this.stats = {
+            totalVisitors: 0,
+            todayVisitors: 0,
+            weekVisitors: 0,
+            lastVisit: null,
+            visitHistory: []
+          };
+        }
+      }
+
+      saveStats() {
+        try {
+          localStorage.setItem(this.statsKey, JSON.stringify(this.stats));
+        } catch (error) {
+          console.log('Error saving stats:', error);
+        }
+      }
+
+      recordVisit() {
+        const now = new Date();
+        const today = now.toDateString();
+        const weekStart = this.getWeekStart(now);
+
+        // Session check (prevent duplicate counting in same session)
+        const sessionId = sessionStorage.getItem(this.sessionKey);
+        if (!sessionId) {
+          sessionStorage.setItem(this.sessionKey, now.getTime().toString());
+
+          // Increment total visitors
+          this.stats.totalVisitors++;
+
+          // Update today's visitors
+          if (this.stats.lastVisit !== today) {
+            this.stats.todayVisitors++;
+          }
+
+          // Update this week's visitors
+          const lastWeekStart = this.stats.lastVisit ? this.getWeekStart(new Date(this.stats.lastVisit)) : null;
+          if (lastWeekStart !== weekStart) {
+            this.stats.weekVisitors++;
+          }
+
+          // Add visit record
+          this.stats.visitHistory.push({
+            timestamp: now.getTime(),
+            date: today
+          });
+
+          // Keep only recent 100 visit records
+          if (this.stats.visitHistory.length > 100) {
+            this.stats.visitHistory = this.stats.visitHistory.slice(-100);
+          }
+
+          this.stats.lastVisit = today;
+          this.saveStats();
+        }
+      }
+
+      getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day;
+        return new Date(d.setDate(diff)).toDateString();
+      }
+
+      updateDisplay() {
+        // Update main counter
+        document.getElementById('visitor-count').textContent = this.stats.totalVisitors;
+
+        // Update statistics panel
+        document.getElementById('total-visitors').textContent = this.stats.totalVisitors;
+        document.getElementById('today-visitors').textContent = this.stats.todayVisitors;
+        document.getElementById('week-visitors').textContent = this.stats.weekVisitors;
+
+        // Display last visit time
+        if (this.stats.lastVisit) {
+          const lastVisit = new Date(this.stats.lastVisit);
+          const now = new Date();
+          const diffTime = now - lastVisit;
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+          let lastVisitText;
+          if (diffDays === 0) {
+            lastVisitText = 'Today';
+          } else if (diffDays === 1) {
+            lastVisitText = 'Yesterday';
+          } else if (diffDays < 7) {
+            lastVisitText = `${diffDays} days ago`;
+          } else {
+            lastVisitText = lastVisit.toLocaleDateString('en-US');
+          }
+
+          document.getElementById('last-visit').textContent = lastVisitText;
+        }
+      }
+
+      getDetailedStats() {
+        return {
+          ...this.stats,
+          averageVisitsPerDay: this.calculateAverageVisitsPerDay(),
+          mostActiveDay: this.getMostActiveDay(),
+          visitTrend: this.getVisitTrend()
+        };
+      }
+
+      calculateAverageVisitsPerDay() {
+        if (this.stats.visitHistory.length === 0) return 0;
+
+        const firstVisit = new Date(this.stats.visitHistory[0].timestamp);
+        const lastVisit = new Date(this.stats.visitHistory[this.stats.visitHistory.length - 1].timestamp);
+        const daysDiff = Math.ceil((lastVisit - firstVisit) / (1000 * 60 * 60 * 24)) + 1;
+
+        return (this.stats.totalVisitors / daysDiff).toFixed(1);
+      }
+
+      getMostActiveDay() {
+        const dayCounts = {};
+        this.stats.visitHistory.forEach(visit => {
+          const day = new Date(visit.timestamp).toLocaleDateString('en-US', { weekday: 'long' });
+          dayCounts[day] = (dayCounts[day] || 0) + 1;
+        });
+
+        return Object.entries(dayCounts).reduce((a, b) => dayCounts[a] > dayCounts[b] ? a : b, '');
+      }
+
+      getVisitTrend() {
+        const recentVisits = this.stats.visitHistory.slice(-7);
+        const trend = recentVisits.length > 0 ? 'Increasing' : 'Stable';
+        return trend;
+      }
+    }
+
+    // Toggle visitor counter visibility
+    function toggleVisitorCounter(show) {
+      const visitorCounter = document.querySelector('.visitor-counter');
+      const visitorStats = document.querySelector('.visitor-stats');
+
+      if (show) {
+        visitorCounter.classList.remove('hidden');
+        visitorStats.classList.remove('hidden');
+      } else {
+        visitorCounter.classList.add('hidden');
+        visitorStats.classList.add('hidden');
+        // 통계 패널도 닫기
+        visitorStats.classList.remove('show');
+      }
+    }
+
+    // Toggle statistics panel function
+    function toggleVisitorStats() {
+      const statsPanel = document.getElementById('visitor-stats');
+      statsPanel.classList.toggle('show');
+    }
+
+    // Start visitor tracking when page loads
+    document.addEventListener('DOMContentLoaded', function () {
+      window.visitorTracker = new VisitorTracker();
+      // 초기 로드 시 방문자 카운터 표시 (첫 페이지이므로)
+      toggleVisitorCounter(true);
+    });
+
+    // Save statistics when page unloads
+    window.addEventListener('beforeunload', function () {
+      if (window.visitorTracker) {
+        window.visitorTracker.saveStats();
+      }
+    });
   </script>
 </body>
 
